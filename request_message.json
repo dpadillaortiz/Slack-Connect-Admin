@@ -1,0 +1,39 @@
+{
+	"blocks": [
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "Hello $MANAGER, $WORKMATE is being invited by $EXTERNAL_USER to join $CHANNEL using Slack Connect.\n\n *Please review this invitation:*"
+			}
+		},
+		{
+			"type": "actions",
+			"elements": [
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Approve",
+						"emoji": true
+					},
+					"value": "click_me_123",
+					"style": "primary",
+					"action_id":"approve_button"
+				},
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Deny",
+						"emoji": true
+					},
+					"value": "click_me_123",
+					"url": "https://google.com",
+					"style": "danger",
+					"action_id":"decline_button"
+				}
+			]
+		}
+	]
+}
