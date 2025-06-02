@@ -3,6 +3,7 @@ import json
 
 from slack_bolt import App
 from slack_sdk.errors import SlackApiError
+from slack_bolt.adapter.aws_lambda import SlackRequestHandler
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -12,8 +13,8 @@ load_dotenv()
 
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
-SLACK_APP_TOKEN= os.getenv("SLACK_APP_TOKEN")
-SLACK_USER_TOKEN = os.getenv("SLACK_USER_TOKEN")
+#SLACK_APP_TOKEN= os.getenv("SLACK_APP_TOKEN")
+#SLACK_USER_TOKEN = os.getenv("SLACK_USER_TOKEN")
 
 app = App(
     # https://api.slack.com/authentication/verifying-requests-from-slack
@@ -35,6 +36,8 @@ def generateBlocksMessage(manager,workmate,external_user,channel,invite_id,json_
 def getUsersManager(user_id):
     # Gets user_id's manager info
     # The user["profile"]["fields"] payload code needs to be verified
+    # https://api.slack.com/methods/users.profile.get
+    # https://api.slack.com/methods/users.lookupByEmail
     try:
         manager_info = app.client.users_profile_get(user=user_id)["profile"]["fields"]["people"]["manager"]
         manager_user_id = app.client.users_lookupByEmail(email=manager_info["email"])["user"]["id"]
@@ -61,6 +64,35 @@ def pendingSlackConnectInvites():
     except SlackApiError as e:
         assert e.response["error"]
 
+# Event: https://api.slack.com/events/shared_channel_invite_accepted
+@app.action("shared_channel_invite_accepted")
+def shared_channel_invite_accepted(ack, body):
+    ack()
+    invite_cust_obj = {
+        "invite":body["invite"],
+        "channel":body["channel"],
+        "workmate":body["accepting_user"]
+    }
+    workmate_name = body["accepting_user"]["name"]
+    workmate_id = body["accepting_user"]["id"]
+    external_user = body["invite"]["inviting_user"]["profile"]["email"]
+    invite_id = body["invite"]["id"]
+    channel_name=body["channel"]["name"]
+    manager_test = body["accepting_user"]["id"]
+    request_msg = generateBlocksMessage(manager_test,workmate_name,external_user,channel_name,invite_id,"request_message.json")
+    app.client.chat_postMessage(channel=manager_test, attachment=request_msg) # send request message
+    app.client.chat_postMessage(channel=workmate_id, text=f"Your invite from {external_user} to join {channel_name} is under review by <@{manager_test}>")
+
+
+@app.message("wake me up")
+def say_hello(ack, message):
+    ack()
+    channel_id = message["channel"]
+    app.client.chat_postMessage(
+        channel=channel_id,
+        text="Summer has come and passed"
+    )
+
 # Needs events listener on
 @app.action("approve_button")
 def approve_invitation(ack, body):
@@ -68,7 +100,7 @@ def approve_invitation(ack, body):
     invite_id = body["actions"][0]["value"]
     app.client.conversations_approveSharedInvite(invite_id=invite_id)
     # TO DO: Add workmate_id to value
-    app.client.chat_postMessage(channel=workmate_id, text=f"Your invite from {external_user} to join {channel_name} has been approved.")
+    #app.client.chat_postMessage(channel=workmate_id, text=f"Your invite from {external_user} to join {channel_name} has been approved.")
 
 # Needs events listener on
 @app.action("decline_button")
@@ -77,10 +109,9 @@ def decline_invitation(ack, body):
     invite_id = body["actions"][0]["value"]
     app.client.conversations_declineSharedInvite(invite_id=invite_id)
     # TO DO: Add workmate_id to value
-    app.client.chat_postMessage(channel=workmate_id, text=f"Your invite from {external_user} to join {channel_name} has been declined.")
+    #app.client.chat_postMessage(channel=workmate_id, text=f"Your invite from {external_user} to join {channel_name} has been declined.")
 
-if __name__ == "__main__":
-
+def main():
     pending_invites = pendingSlackConnectInvites()
     
     for invite in pending_invites:
@@ -91,5 +122,21 @@ if __name__ == "__main__":
         channel_name=invite["channel"]["name"]
         manager_id = getUsersManager(invite["workmate"]["id"])
         request_msg = generateBlocksMessage(manager_id, workmate_name, external_user, manager_id, invite_id, "request_message.json")
-        app.client.chat_postMessage(channel=manager_id, attachment=request_msg) # send request message
-        app.client.chat_postMessage(channel=workmate_id, text=f"Your invite from {external_user} to join {channel_name} is under review by <@{manager_id}>")
+        #app.client.chat_postMessage(channel=manager_id, attachment=request_msg) # send request message
+        #app.client.chat_postMessage(channel=workmate_id, text=f"Your invite from {external_user} to join {channel_name} is under review by <@{manager_id}>")
+
+@app.event("app_home_opened")
+def handle_app_home_opened(client, event, logger):
+    # Respond to the app_home_opened event
+    pass
+
+def handler(event, context):
+    slack_handler = SlackRequestHandler(app=app)
+    return slack_handler.handle(event, context)
+
+app.client.chat_postMessage(
+        channel="C08UZG1A11S",
+        text="Summer has come and passed"
+    )
+    
+
